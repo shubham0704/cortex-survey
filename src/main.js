@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { renderer, scene, camera, macroCam } from './scene.js';
+import { renderer, scene, camera } from './scene.js';
 import { uScanPoint, uScanTime } from './scan-shader.js';
 import { buildBrain } from './levels/brain.js';
 import { blip } from './audio.js';
@@ -8,6 +8,7 @@ import { clamp } from './gen/noise.js';
 import { buildForest } from './levels/forest.js';
 import { buildSynapse } from './levels/synapse.js';
 import { createDescent } from './scalestack.js';
+import { createLocator } from './locator.js';
 
 // Bootstrap + render loop. Owns the descent path state (currently a single
 // level: scanIdx cycles the survey regions) and the frame's 3D->screen math.
@@ -22,6 +23,7 @@ const REGIONS = brain.REGIONS;
 // synapse (z in [0,2]: 0 = brain, 1 = forest, 2 = synapse).
 const forest = buildForest();
 const synapse = buildSynapse();
+const locator = createLocator(el('macro-canvas'));
 const z0 = location.hash === '#synapse' ? 2 : location.hash === '#forest' ? 1 : 0;  // deep-links
 const deepLink = z0 > 0;
 const descent = createDescent(z0);
@@ -87,7 +89,7 @@ function resize(){
   const distV = brainR/Math.tan(vfov/2), distH = distV/camera.aspect;
   baseCamZ = Math.max(distV, distH)*1.34;
   camera.position.set(0.15, 0.35, baseCamZ);
-  camera.updateProjectionMatrix(); hud.sizeEEG(); hud.buildOverlay();
+  camera.updateProjectionMatrix(); hud.sizeEEG(); hud.buildOverlay(); locator.size();
 }
 addEventListener('resize', resize);
 
@@ -144,18 +146,8 @@ function frame(ts){
   const veil = Math.max(1 - clamp(Math.abs(z - 0.5)/0.18, 0, 1), 1 - clamp(Math.abs(z - 1.5)/0.18, 0, 1));
   el('veil').style.opacity = veil.toFixed(3);                                          // dark seams at 0.5 and 1.5
 
-  // MACRO window — a magnified look at the scanned cortex (surface context)
-  const mw = el('macro-window');
-  if(mw && mw.offsetParent !== null){
-    const r = mw.getBoundingClientRect(), y = innerHeight - r.bottom;
-    const vdir = new THREE.Vector3().subVectors(camera.position, wA).normalize();
-    macroCam.position.copy(wA).addScaledVector(vdir, 1.25); macroCam.lookAt(wA);
-    macroCam.aspect = r.width/r.height; macroCam.updateProjectionMatrix();
-    renderer.setScissorTest(true); renderer.setScissor(r.left, y, r.width, r.height); renderer.setViewport(r.left, y, r.width, r.height);
-    renderer.setClearColor(0x0a0c12, 1); renderer.toneMappingExposure = 0.72; renderer.render(scene, macroCam);
-    renderer.setClearColor(0x000000, 0); renderer.toneMappingExposure = 0.95;
-    renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight);
-  }
+  // MACRO window — a scale-aware anatomical locator (2D atlas): brain -> column -> synapse
+  locator.draw(z, scanIdx, REGIONS[scanIdx], t);
 
   // reticle + leader + contact shadow fade out as we leave the surface
   const surf = clamp(1 - z*2.6, 0, 1);
@@ -172,7 +164,7 @@ function frame(ts){
     hud.updateReticleLeader(sx, sy, op, t);
   }
 
-  el('macro-mag').textContent = 'MAG ' + REGIONS[scanIdx].mag;
+  el('macro-mag').textContent = z < 0.5 ? 'ATLAS · LATERAL' : z < 1.5 ? 'COLUMN · I–VI' : 'SYNAPSE';
   el('scanstate').textContent = z > 1.55 ? 'SYNAPTIC CLEFT' : z > 0.55 ? 'NEURAL FIELD' : z > 0.06 ? 'DESCENDING…' : 'SCANNING…';
 
   hud.drawEEG(t*1000);
