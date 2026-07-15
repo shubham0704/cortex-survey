@@ -41,7 +41,7 @@
   body::after{content:"";position:fixed;inset:0;pointer-events:none;background:var(--floor)}
 
   #stage{position:fixed;inset:0}
-  canvas#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+  canvas#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
   #shadow{position:absolute;left:50%;top:73%;width:38vmin;height:8vmin;transform:translate(-50%,-50%);
     border-radius:50%;background:radial-gradient(50% 50% at 50% 50%, var(--shadow), transparent 70%);filter:blur(7px)}
   #overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
@@ -162,7 +162,7 @@
 
   <div id="tele" class="bottom">MONTAGE 10–20 · 19 CH · 512 HZ</div>
   <div id="scanstate" class="bottom">SCANNING…</div>
-  <div id="hint">SCROLL · PINCH · +/− TO DESCEND</div>
+  <div id="hint">DRAG TO ROTATE · SCROLL TO DESCEND</div>
 
   <div id="loader">INITIALIZING SURVEY…</div>
 </div>

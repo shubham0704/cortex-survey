@@ -9,8 +9,9 @@ specimen — descend into it.
 - **specimen** — the whole procedural brain (cerebrum + cerebellum + brainstem).
 - **survey / region** — one scan waypoint on the specimen (a `REGIONS[]` entry).
 - **descent** — the zoom across scales: brain → cortical patch → neuron forest →
-  synapse. Each step goes *inside*, not just closer. Step 1 is live: scroll / pinch /
-  keys dive the main view from the brain into the neuron forest and back.
+  synapse. Each step goes *inside*, not just closer. Step 1 is live: drag to rotate the
+  brain and turn a region to the front (it becomes active), then scroll / pinch / keys
+  dive the main view into that region's neuron forest and back.
 - **level** — one node of the scale-stack; one file under `src/levels/`.
 - **scale-stack** — the lazy hierarchical LOD tree spanning the levels.
 - **frame** — a level's local coordinate system. Under the floating-origin scheme

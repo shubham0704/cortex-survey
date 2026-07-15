@@ -39,8 +39,37 @@ let gScale = 1;                                                   // Safari pinc
 addEventListener('gesturestart', (e) => { e.preventDefault(); gScale = e.scale; });
 addEventListener('gesturechange', (e) => { e.preventDefault(); grab(); descent.nudge((e.scale - gScale) * 1.3); gScale = e.scale; });
 
-const wA = new THREE.Vector3(), wN = new THREE.Vector3(), proj = new THREE.Vector3(), camDir = new THREE.Vector3();
-let scanIdx = 0, tick = 0, last = 0, regionTimer = 0, beatTimer = 0, started = 0, baseCamZ = 5.4;
+// drag to rotate the brain — turn a region to the front, then scroll to dive into it
+const gl = el('gl');
+let dragging = false, dragX = 0, dragY = 0, rotY = -0.35, rotX = 0, manualRot = false, manualRegion = false;
+gl.addEventListener('pointerdown', (e) => {
+  dragging = true; manualRot = true; manualRegion = true; grab();
+  dragX = e.clientX; dragY = e.clientY;
+});
+addEventListener('pointermove', (e) => {
+  if(!dragging) return;
+  rotY += (e.clientX - dragX) * 0.006;
+  rotX = clamp(rotX + (e.clientY - dragY) * 0.006, -0.7, 0.7);
+  dragX = e.clientX; dragY = e.clientY;
+});
+addEventListener('pointerup', () => { dragging = false; });
+addEventListener('pointercancel', () => { dragging = false; });
+
+const wA = new THREE.Vector3(), wN = new THREE.Vector3(), proj = new THREE.Vector3(), camDir = new THREE.Vector3(), tmpN = new THREE.Vector3();
+let scanIdx = 0, tick = 0, last = 0, regionTimer = 0, regionPickTimer = 0, beatTimer = 0, started = 0, baseCamZ = 5.4;
+
+// the region currently turned toward the camera (used once you take manual control)
+function frontMostRegion(){
+  camera.getWorldDirection(camDir);
+  let best = -2, bi = scanIdx, cur = -2;
+  for(let i = 0; i < REGIONS.length; i++){
+    tmpN.copy(REGIONS[i].lnormal).transformDirection(REGIONS[i].host.matrixWorld);
+    const f = -tmpN.dot(camDir);
+    if(i === scanIdx) cur = f;
+    if(f > best){ best = f; bi = i; }
+  }
+  return best > cur + 0.06 ? bi : scanIdx;                        // hysteresis: switch only if clearly more front
+}
 
 function resize(){
   const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false);
@@ -60,22 +89,35 @@ function frame(ts){
   const z = descent.update(dt);
   forest.update(t, z);
 
-  // damp brain rotation as we dive so the zoom-in stays stable
-  if(!REDUCED){ const rot = 1 - clamp(z*2.6, 0, 1);
-    brain.group.rotation.y = -0.35 + Math.sin(t*0.12)*0.42*rot;
-    brain.group.rotation.x = Math.sin(t*0.09)*0.06*rot; }
+  // rotation: manual (drag) holds where you leave it; otherwise auto-rotate, damped as we dive
+  if(!REDUCED){
+    if(manualRot){ brain.group.rotation.y = rotY; brain.group.rotation.x = rotX; }
+    else { const rot = 1 - clamp(z*2.6, 0, 1);
+      brain.group.rotation.y = -0.35 + Math.sin(t*0.12)*0.42*rot;
+      brain.group.rotation.x = Math.sin(t*0.09)*0.06*rot; }
+  }
+  brain.group.updateWorldMatrix(false, true);
 
   hud.tickTypewriter(dt);
+  beatTimer += dt; if(beatTimer >= 1150){ beatTimer -= 1150; blip(240 + scanIdx*18, 0.16, 0.045); }
 
-  // current anchor world-space
+  // region selection — auto-cycle until you take control (drag), then whichever region
+  // you turn to the front (facing the camera) becomes the active one
+  if(manualRegion){
+    regionPickTimer += dt;
+    if(z < 0.4 && regionPickTimer > 120){ regionPickTimer = 0;
+      const bi = frontMostRegion();
+      if(bi !== scanIdx){ scanIdx = bi; tick++; hud.setRegion(scanIdx, REGIONS, tick); forest.reseed(scanIdx); }
+    }
+  } else {
+    regionTimer += dt; if(regionTimer >= 5200){ regionTimer = 0; tick++; scanIdx = (scanIdx + 1) % REGIONS.length; hud.setRegion(scanIdx, REGIONS, tick); forest.reseed(scanIdx); }
+  }
+
+  // current anchor world-space (matrices updated above)
   const R = REGIONS[scanIdx];
-  R.host.updateWorldMatrix(true, false);
   wA.copy(R.local).applyMatrix4(R.host.matrixWorld);
   wN.copy(R.lnormal).transformDirection(R.host.matrixWorld);
   uScanPoint.value.copy(wA);
-
-  beatTimer += dt; if(beatTimer >= 1150){ beatTimer -= 1150; blip(240 + scanIdx*18, 0.16, 0.045); }
-  regionTimer += dt; if(regionTimer >= 5200){ regionTimer = 0; tick++; scanIdx = (scanIdx + 1) % REGIONS.length; hud.setRegion(scanIdx, REGIONS, tick); forest.reseed(scanIdx); }
 
   // MAIN view — the dive: brain (dollying in) for z<0.5 hands off through a dark
   // veil to the full-screen neuron forest for z>0.5.
