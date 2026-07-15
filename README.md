@@ -41,7 +41,7 @@ Or host it: push to a repo and enable GitHub Pages.
 - **Explore** — drag to rotate the brain; whichever region you turn to the front becomes
   active. Then scroll, pinch, or press `+`/`−` to dive that region into a procedural Cajal
   neuron forest and back (or open the `#forest` deep-link). The brain → forest hand-off is
-  a through-dark fade.
+  a through-dark fade. Once you're deep, drag orbits the camera around the neurons.
 - **Studio render** — ACES Filmic tone mapping, PMREM `RoomEnvironment`, three-point
   lighting over a CSS seamless backdrop with a contact shadow. Light + dark themes.
 - **Scan shader** — `onBeforeCompile` injects a travelling highlight ring + halo

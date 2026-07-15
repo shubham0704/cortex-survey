@@ -41,16 +41,22 @@ addEventListener('gesturechange', (e) => { e.preventDefault(); grab(); descent.n
 
 // drag to rotate the brain — turn a region to the front, then scroll to dive into it
 const gl = el('gl');
-let dragging = false, dragX = 0, dragY = 0, rotY = -0.35, rotX = 0, manualRot = false, manualRegion = false;
+let dragging = false, dragX = 0, dragY = 0, rotY = -0.35, rotX = 0, manualRot = false, manualRegion = false, forestYaw = 0, forestPitch = 0;
 gl.addEventListener('pointerdown', (e) => {
   dragging = true; manualRot = true; manualRegion = true; grab();
   dragX = e.clientX; dragY = e.clientY;
 });
 addEventListener('pointermove', (e) => {
   if(!dragging) return;
-  rotY += (e.clientX - dragX) * 0.006;
-  rotX = clamp(rotX + (e.clientY - dragY) * 0.006, -0.7, 0.7);
+  const dx = e.clientX - dragX, dy = e.clientY - dragY;
   dragX = e.clientX; dragY = e.clientY;
+  if(descent.z > 0.5){                                            // deep: orbit the forest
+    forestYaw += dx * 0.006;
+    forestPitch = clamp(forestPitch + dy * 0.006, -1.1, 1.1);
+  } else {                                                        // surface: rotate the brain
+    rotY += dx * 0.006;
+    rotX = clamp(rotX + dy * 0.006, -0.7, 0.7);
+  }
 });
 addEventListener('pointerup', () => { dragging = false; });
 addEventListener('pointercancel', () => { dragging = false; });
@@ -87,7 +93,7 @@ function frame(ts){
   if(!started) started = ts; const t = (ts - started)/1000; const dt = Math.min(50, ts - last); last = ts;
   uScanTime.value = t;
   const z = descent.update(dt);
-  forest.update(t, z);
+  forest.update(t, z, forestYaw, forestPitch);
 
   // rotation: manual (drag) holds where you leave it; otherwise auto-rotate, damped as we dive
   if(!REDUCED){

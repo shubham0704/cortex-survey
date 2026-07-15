@@ -11,7 +11,8 @@ specimen — descend into it.
 - **descent** — the zoom across scales: brain → cortical patch → neuron forest →
   synapse. Each step goes *inside*, not just closer. Step 1 is live: drag to rotate the
   brain and turn a region to the front (it becomes active), then scroll / pinch / keys
-  dive the main view into that region's neuron forest and back.
+  dive the main view into that region's neuron forest and back; deep in the forest, drag
+  orbits the camera around the neurons.
 - **level** — one node of the scale-stack; one file under `src/levels/`.
 - **scale-stack** — the lazy hierarchical LOD tree spanning the levels.
 - **frame** — a level's local coordinate system. Under the floating-origin scheme

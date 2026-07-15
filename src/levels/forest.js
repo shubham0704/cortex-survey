@@ -81,8 +81,8 @@ export function buildForest(){
   }
 
   // animate firing (half-wave envelope per neuron) + dolly the camera by descent z
-  function update(t, z){
-    descentCamera(camera, z, t);
+  function update(t, z, yaw, pitch){
+    descentCamera(camera, z, t, yaw, pitch);
     for(const n of neurons){
       const fire = Math.max(0, Math.sin(t*n.rate + n.phase));
       n.mat.color.copy(n.base).lerp(n.hot, fire*0.6).multiplyScalar(0.6 + fire*fire*1.3);
