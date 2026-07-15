@@ -18,10 +18,12 @@ resolved, the ADR that closes it.
 - **Cross-fade mechanic** — a *through-dark opacity hand-off* (only one level rendered
   at a time; both fade to the eyepiece dark at the z = 0.5 seam). →
   `research/2026-07-14-forest-descent.md`
+- **The synapse level — does the descent go a third scale deeper?**
+  Yes. z now runs [0,2] over three levels (brain → forest → synapse) with dark seams at
+  0.5 and 1.5; the synapse releases vesicles across the cleft to postsynaptic receptors. →
+  `research/2026-07-15-synapse-level.md`, `src/levels/synapse.js`
 
 ## Open
-- **The synapse level** — the next descent step (z deeper than the forest): a single
-  synapse ("the squid") releasing. `src/levels/synapse.js`.
 - **Fold realism** — the gyri read as brain but still a touch generic; try worley
   (cellular) noise or a sulcal-depth prior for more anatomical folds.
 - **Ink / plate mode** — a Cajal black-and-white render toggle beside the photoreal

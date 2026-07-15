@@ -1,7 +1,6 @@
-// The descent: the two-level slice of the scale-stack (brain <-> neuron forest)
-// driven by a scalar z in [0,1] (0 = brain surface, 1 = deep in the forest).
-// User-driven — scroll / pinch / keys nudge a target and z eases toward it; there
-// is no auto-loop. Realizes docs/adr/0003 at two levels.
+// The descent scalar z in [0,2] over three levels: brain (0) -> neuron forest (1) ->
+// synapse (2), with dark seams at 0.5 and 1.5. User-driven — scroll / pinch / keys
+// nudge a target and z eases toward it; there is no auto-loop. Realizes docs/adr/0003.
 //
 // Cross-fade mechanic (resolves an open question): a *through-dark opacity
 // hand-off* — only one level is rendered at a time, and both fade to the dark
@@ -11,7 +10,7 @@ export function smoothstep(a, b, x){ const t = Math.max(0, Math.min(1, (x - a) /
 
 export function createDescent(z0 = 0){
   let z = z0, target = z0, held = false;
-  const c = v => Math.max(0, Math.min(1, v));
+  const c = v => Math.max(0, Math.min(2, v));
   return {
     update(dt){
       if(held) z += (1 - z) * Math.min(1, dt/300);               // snap to the forest and stay

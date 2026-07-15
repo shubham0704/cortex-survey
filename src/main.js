@@ -6,6 +6,7 @@ import { blip } from './audio.js';
 import * as hud from './hud.js';
 import { clamp } from './gen/noise.js';
 import { buildForest } from './levels/forest.js';
+import { buildSynapse } from './levels/synapse.js';
 import { createDescent } from './scalestack.js';
 
 // Bootstrap + render loop. Owns the descent path state (currently a single
@@ -17,12 +18,13 @@ const brain = buildBrain();
 scene.add(brain.group);
 const REGIONS = brain.REGIONS;
 
-// descent: scroll / pinch / +- keys drive a full-screen dive from the brain into
-// the neuron forest (z in [0,1]: 0 = brain surface, 1 = deep in the forest).
+// descent: scroll / pinch / +- keys drive a full-screen dive brain -> neuron forest ->
+// synapse (z in [0,2]: 0 = brain, 1 = forest, 2 = synapse).
 const forest = buildForest();
-const deepLink = location.hash === '#forest';                    // shareable "dive straight in"
-const descent = createDescent(deepLink ? 1 : 0);
-if(deepLink) descent.setHeld(true);
+const synapse = buildSynapse();
+const z0 = location.hash === '#synapse' ? 2 : location.hash === '#forest' ? 1 : 0;  // deep-links
+const deepLink = z0 > 0;
+const descent = createDescent(z0);
 
 const hint = el('hint');
 let interacted = deepLink;
@@ -41,7 +43,7 @@ addEventListener('gesturechange', (e) => { e.preventDefault(); grab(); descent.n
 
 // drag to rotate the brain — turn a region to the front, then scroll to dive into it
 const gl = el('gl');
-let dragging = false, dragX = 0, dragY = 0, rotY = -0.35, rotX = 0, manualRot = false, manualRegion = false, forestYaw = 0, forestPitch = 0;
+let dragging = false, dragX = 0, dragY = 0, rotY = -0.35, rotX = 0, manualRot = false, manualRegion = false, orbitYaw = 0, orbitPitch = 0;
 gl.addEventListener('pointerdown', (e) => {
   dragging = true; manualRot = true; manualRegion = true; grab();
   dragX = e.clientX; dragY = e.clientY;
@@ -50,9 +52,9 @@ addEventListener('pointermove', (e) => {
   if(!dragging) return;
   const dx = e.clientX - dragX, dy = e.clientY - dragY;
   dragX = e.clientX; dragY = e.clientY;
-  if(descent.z > 0.5){                                            // deep: orbit the forest
-    forestYaw += dx * 0.006;
-    forestPitch = clamp(forestPitch + dy * 0.006, -1.1, 1.1);
+  if(descent.z > 0.5){                                            // deep: orbit the forest / synapse
+    orbitYaw += dx * 0.006;
+    orbitPitch = clamp(orbitPitch + dy * 0.006, -1.1, 1.1);
   } else {                                                        // surface: rotate the brain
     rotY += dx * 0.006;
     rotX = clamp(rotX + dy * 0.006, -0.7, 0.7);
@@ -93,7 +95,8 @@ function frame(ts){
   if(!started) started = ts; const t = (ts - started)/1000; const dt = Math.min(50, ts - last); last = ts;
   uScanTime.value = t;
   const z = descent.update(dt);
-  forest.update(t, z, forestYaw, forestPitch);
+  forest.update(t, z, orbitYaw, orbitPitch);
+  synapse.update(t, z, orbitYaw, orbitPitch);
 
   // rotation: manual (drag) holds where you leave it; otherwise auto-rotate, damped as we dive
   if(!REDUCED){
@@ -113,10 +116,10 @@ function frame(ts){
     regionPickTimer += dt;
     if(z < 0.4 && regionPickTimer > 120){ regionPickTimer = 0;
       const bi = frontMostRegion();
-      if(bi !== scanIdx){ scanIdx = bi; tick++; hud.setRegion(scanIdx, REGIONS, tick); forest.reseed(scanIdx); }
+      if(bi !== scanIdx){ scanIdx = bi; tick++; hud.setRegion(scanIdx, REGIONS, tick); forest.reseed(scanIdx); synapse.reseed(scanIdx); }
     }
   } else {
-    regionTimer += dt; if(regionTimer >= 5200){ regionTimer = 0; tick++; scanIdx = (scanIdx + 1) % REGIONS.length; hud.setRegion(scanIdx, REGIONS, tick); forest.reseed(scanIdx); }
+    regionTimer += dt; if(regionTimer >= 5200){ regionTimer = 0; tick++; scanIdx = (scanIdx + 1) % REGIONS.length; hud.setRegion(scanIdx, REGIONS, tick); forest.reseed(scanIdx); synapse.reseed(scanIdx); }
   }
 
   // current anchor world-space (matrices updated above)
@@ -125,17 +128,21 @@ function frame(ts){
   wN.copy(R.lnormal).transformDirection(R.host.matrixWorld);
   uScanPoint.value.copy(wA);
 
-  // MAIN view — the dive: brain (dollying in) for z<0.5 hands off through a dark
-  // veil to the full-screen neuron forest for z>0.5.
+  // MAIN view — the dive: brain (z<0.5) -> neuron forest (0.5..1.5) -> synapse (z>1.5),
+  // each pair handed off through a full-screen dark veil at z = 0.5 and z = 1.5.
   renderer.setScissorTest(false); renderer.setClearColor(0x000000, 0); renderer.setViewport(0, 0, innerWidth, innerHeight);
   if(z < 0.5){
     camera.position.set(0.15, 0.35, baseCamZ - clamp(z/0.5, 0, 1)*(baseCamZ - 1.5)); // dolly straight in
     renderer.render(scene, camera);
-  } else {
+  } else if(z < 1.5){
     forest.camera.aspect = innerWidth/innerHeight; forest.camera.updateProjectionMatrix();
     renderer.render(forest.scene, forest.camera);
+  } else {
+    synapse.camera.aspect = innerWidth/innerHeight; synapse.camera.updateProjectionMatrix();
+    renderer.render(synapse.scene, synapse.camera);
   }
-  el('veil').style.opacity = (1 - clamp(Math.abs(z - 0.5)/0.18, 0, 1)).toFixed(3);     // dark seam
+  const veil = Math.max(1 - clamp(Math.abs(z - 0.5)/0.18, 0, 1), 1 - clamp(Math.abs(z - 1.5)/0.18, 0, 1));
+  el('veil').style.opacity = veil.toFixed(3);                                          // dark seams at 0.5 and 1.5
 
   // MACRO window — a magnified look at the scanned cortex (surface context)
   const mw = el('macro-window');
@@ -166,7 +173,7 @@ function frame(ts){
   }
 
   el('macro-mag').textContent = 'MAG ' + REGIONS[scanIdx].mag;
-  el('scanstate').textContent = z > 0.55 ? 'NEURAL FIELD' : (z > 0.06 ? 'DESCENDING…' : 'SCANNING…');
+  el('scanstate').textContent = z > 1.55 ? 'SYNAPTIC CLEFT' : z > 0.55 ? 'NEURAL FIELD' : z > 0.06 ? 'DESCENDING…' : 'SCANNING…';
 
   hud.drawEEG(t*1000);
   const s = Math.floor(t); el('clock').textContent = [s/3600, s/60%60, s%60].map(n => ('0'+Math.floor(n)).slice(-2)).join(':');
