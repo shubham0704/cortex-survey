@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { renderer, scene, camera } from './scene.js';
-import { uScanPoint, uScanTime } from './scan-shader.js';
+import { uScanPoint, uScanTime, uInk } from './scan-shader.js';
 import { buildBrain } from './levels/brain.js';
 import { blip } from './audio.js';
 import * as hud from './hud.js';
@@ -64,6 +64,19 @@ addEventListener('pointermove', (e) => {
 });
 addEventListener('pointerup', () => { dragging = false; });
 addEventListener('pointercancel', () => { dragging = false; });
+
+// PLATE toggle — flip the whole survey to Cajal sepia-on-cream ink (brain via the
+// shader luminance remap, forest + synapse to dark ink, ground/HUD/veil via CSS)
+let plate = false;
+const inkBtn = el('ink-btn');
+inkBtn.addEventListener('click', () => {
+  plate = !plate;
+  document.documentElement.classList.toggle('plate', plate);
+  inkBtn.setAttribute('aria-pressed', String(plate));
+  uInk.value = plate ? 1 : 0;
+  forest.setInk(plate);
+  synapse.setInk(plate);
+});
 
 const wA = new THREE.Vector3(), wN = new THREE.Vector3(), proj = new THREE.Vector3(), camDir = new THREE.Vector3(), tmpN = new THREE.Vector3();
 let scanIdx = 0, tick = 0, last = 0, regionTimer = 0, regionPickTimer = 0, beatTimer = 0, started = 0, baseCamZ = 5.4;

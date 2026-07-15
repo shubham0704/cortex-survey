@@ -22,11 +22,20 @@ resolved, the ADR that closes it.
   Yes. z now runs [0,2] over three levels (brain → forest → synapse) with dark seams at
   0.5 and 1.5; the synapse releases vesicles across the cleft to postsynaptic receptors. →
   `research/2026-07-15-synapse-level.md`, `src/levels/synapse.js`
+- **Ink / plate mode — a Cajal render toggle beside the photoreal specimen?**
+  Yes. A PLATE button flips the whole survey to sepia-on-cream ink: the brain via a
+  shader luminance→sepia remap (one uniform, no material swap), forest + synapse to dark
+  ink on cream, ground/HUD/veil via a `.plate` CSS palette. →
+  `research/2026-07-15-ink-plate-and-atlas.md`, `src/scan-shader.js`
+- **Macro window — show *location* the traditional way, at every scale?**
+  Yes. The fuzzy WebGL cortex crop became a 2D anatomical atlas that swaps schematic by
+  depth: lateral brain + region marker → cortical column (layers I–VI) → synapse diagram. →
+  `research/2026-07-15-ink-plate-and-atlas.md`, `src/locator.js`
 
 ## Open
 - **Fold realism** — the gyri read as brain but still a touch generic; try worley
   (cellular) noise or a sulcal-depth prior for more anatomical folds.
-- **Ink / plate mode** — a Cajal black-and-white render toggle beside the photoreal
-  specimen (more authored, more iconic).
+- **Plate silhouette** — in ink mode the lit crown of the brain fades into the cream
+  ground; a grazing-angle (fresnel) darkening would firm up the outline like an engraving.
 - **Credibility** — does a stylized procedural specimen hold up, or do we eventually
   want real MRI-derived geometry for the whole-brain level?

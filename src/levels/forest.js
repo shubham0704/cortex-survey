@@ -9,6 +9,10 @@ import { descentCamera } from '../frames.js';
 const INK    = new THREE.Color('#e9e3d5');
 const TEAL   = new THREE.Color('#46e0c6');
 const VIOLET = new THREE.Color('#a874ff');
+// Cajal plate palette — dark sepia ink drawn on cream instead of glow on black
+const PLATE_INK = new THREE.Color('#2a2016');
+const PLATE_HOT = new THREE.Color('#6b4d24');
+const PLATE_BG  = 0xe6dabd;
 
 // soft radial dot so somata read as glowing cell bodies, not hard discs
 function dotTexture(){
@@ -26,7 +30,7 @@ export function buildForest(){
   const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 40);
   const group = new THREE.Group(); scene.add(group);
   const dotTex = dotTexture();
-  let neurons = [];
+  let neurons = [], ink = false;
 
   function clear(){
     for(const n of neurons){ n.lines.geometry.dispose(); n.lines.material.dispose(); n.soma.material.dispose(); }
@@ -64,10 +68,11 @@ export function buildForest(){
     g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
     const hot = rand() < 0.5 ? TEAL : VIOLET;
     const base = INK.clone().lerp(hot, 0.15).multiplyScalar(0.7);
-    const mat = new THREE.LineBasicMaterial({ color: base.clone(), transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+    const blend = ink ? THREE.NormalBlending : THREE.AdditiveBlending;
+    const mat = new THREE.LineBasicMaterial({ color: base.clone(), transparent: true, opacity: 0.9, blending: blend, depthWrite: false });
     const lines = new THREE.LineSegments(g, mat);
 
-    const soma = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex, color: INK.clone(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    const soma = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex, color: INK.clone(), transparent: true, blending: blend, depthWrite: false }));
     soma.position.set(px, py, pz);
     group.add(lines, soma);
     return { lines, mat, soma, base, hot, phase: rand()*6.28, rate: 0.5 + rand()*1.4, sz: 0.12 + rand()*0.06 };
@@ -85,12 +90,29 @@ export function buildForest(){
     descentCamera(camera, z, t, yaw, pitch);
     for(const n of neurons){
       const fire = Math.max(0, Math.sin(t*n.rate + n.phase));
-      n.mat.color.copy(n.base).lerp(n.hot, fire*0.6).multiplyScalar(0.6 + fire*fire*1.3);
-      n.soma.scale.setScalar(n.sz * (1 + fire*1.1));
-      n.soma.material.color.copy(INK).lerp(n.hot, 0.3 + fire*0.5).multiplyScalar(0.5 + fire*0.9);
+      if(ink){                                                     // Cajal plate: static-ish dark ink, faint firing
+        n.mat.color.copy(PLATE_INK).lerp(PLATE_HOT, fire*0.45);
+        n.soma.scale.setScalar(n.sz * (1 + fire*0.5));
+        n.soma.material.color.copy(PLATE_INK).lerp(PLATE_HOT, 0.25 + fire*0.4);
+      } else {                                                     // eyepiece glow on black
+        n.mat.color.copy(n.base).lerp(n.hot, fire*0.6).multiplyScalar(0.6 + fire*fire*1.3);
+        n.soma.scale.setScalar(n.sz * (1 + fire*1.1));
+        n.soma.material.color.copy(INK).lerp(n.hot, 0.3 + fire*0.5).multiplyScalar(0.5 + fire*0.9);
+      }
+    }
+  }
+
+  // switch the whole field between glow-on-black and Cajal ink-on-cream
+  function setInk(on){
+    ink = on;
+    scene.fog.color.set(on ? PLATE_BG : 0x0a0c12);
+    const blend = on ? THREE.NormalBlending : THREE.AdditiveBlending;
+    for(const n of neurons){
+      n.mat.blending = blend; n.mat.needsUpdate = true;
+      n.soma.material.blending = blend; n.soma.material.needsUpdate = true;
     }
   }
 
   reseed(0);
-  return { scene, camera, reseed, update };
+  return { scene, camera, reseed, update, setInk };
 }

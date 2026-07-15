@@ -7,6 +7,8 @@ import { synapseCamera } from '../frames.js';
 // — the molecular handshake made visible, one scale below the neuron forest.
 const VES = new THREE.Color(0xbfeee6);   // vesicle / transmitter pale
 const HOT = new THREE.Color(0xf1e8ff);   // firing flash
+const PLATE     = new THREE.Color(0x2a2016);   // Cajal plate: dark sepia ink
+const PLATE_HOT = new THREE.Color(0x6b4d24);   // ink firing accent
 
 function dotTexture(){
   const c = document.createElement('canvas'); c.width = c.height = 64;
@@ -60,7 +62,7 @@ export function buildSynapse(){
     s.userData = { origin: new THREE.Vector3(), vel: new THREE.Vector3(), birth: -9, target: null };
     scene.add(s); parts.push(s);
   }
-  let pi = 0, lastRel = -1;
+  let pi = 0, lastRel = -1, ink = false;
 
   function release(t){
     const v = vesicles[Math.floor(Math.random()*vesicles.length)];
@@ -85,7 +87,7 @@ export function buildSynapse(){
       const u = v.userData;
       v.position.set(u.home.x + Math.sin(t*0.8 + u.ph)*0.03, u.home.y + Math.cos(t*0.6 + u.ph)*0.03, u.home.z + Math.sin(t*0.5 + u.ph)*0.03);
       const e = t - u.fired, f = e >= 0 && e < 0.4 ? 1 - e/0.4 : 0;
-      v.material.color.copy(VES).lerp(HOT, f); v.scale.setScalar(0.12 * (1 + f*0.9));
+      v.material.color.copy(ink ? PLATE : VES).lerp(ink ? PLATE_HOT : HOT, f); v.scale.setScalar(0.12 * (1 + f*0.9));
     }
     for(const s of parts){
       if(!s.visible) continue;
@@ -97,8 +99,20 @@ export function buildSynapse(){
     }
     for(const r of receptors){
       const e = t - r.userData.flash, f = e >= 0 && e < 0.55 ? 1 - e/0.55 : 0;
-      r.material.color.copy(r.userData.base).lerp(HOT, f); r.scale.setScalar(0.09 * (1 + f*1.4));
+      r.material.color.copy(ink ? PLATE : r.userData.base).lerp(ink ? PLATE_HOT : HOT, f); r.scale.setScalar(0.09 * (1 + f*1.4));
     }
+  }
+
+  // switch the synapse between glow-on-black and Cajal ink-on-cream
+  function setInk(on){
+    ink = on;
+    scene.fog.color.set(on ? 0xe6dabd : 0x0a0c12);
+    const blend = on ? THREE.NormalBlending : THREE.AdditiveBlending;
+    pre.visible = !on;                                             // drop the glow bulb; keep the wire rim as the ink outline
+    rim.material.blending = blend; rim.material.color.set(on ? 0x2a2016 : 0x46e0c6); rim.material.opacity = on ? 0.5 : 0.1; rim.material.needsUpdate = true;
+    for(const v of vesicles){ v.material.blending = blend; v.material.needsUpdate = true; }
+    for(const r of receptors){ r.material.blending = blend; r.material.needsUpdate = true; }
+    for(const s of parts){ s.material.blending = blend; s.material.color.set(on ? 0x2a2016 : 0xa874ff); s.material.needsUpdate = true; }
   }
 
   function reseed(regionIndex){
@@ -107,5 +121,5 @@ export function buildSynapse(){
   }
 
   reseed(0);
-  return { scene, camera, update, reseed };
+  return { scene, camera, update, reseed, setInk };
 }
