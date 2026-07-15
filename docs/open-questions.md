@@ -11,11 +11,17 @@ resolved, the ADR that closes it.
   Lazy scale-stack (inter-level) + octree (intra-level) + floating origin
   (precision). → `research/2026-07-14-multiscale-zoom-data-structure.md`, `adr/0002`,
   `adr/0003`
+- **Descent, step 1 — does a real macro-window descent (cortex → Cajal forest) work?**
+  Yes. The macro optics window drills from the cortex zoom into a procedural neuron
+  forest, seeded per region, via the 2-level scale-stack + per-level frames. →
+  `research/2026-07-14-forest-descent.md`, `src/levels/forest.js`
+- **Cross-fade mechanic** — a *through-dark opacity hand-off* (only one level rendered
+  at a time; both fade to the eyepiece dark at the z = 0.5 seam). →
+  `research/2026-07-14-forest-descent.md`
 
 ## Open
-- **Descent, step 1** — make the macro window an actual descent (cortical patch →
-  Cajal forest) with the re-rooting frame. The smallest thing that proves the stack.
-- **Cross-fade mechanic** — opacity blend vs geometry morph between adjacent levels.
+- **The synapse level** — the next descent step (z deeper than the forest): a single
+  synapse ("the squid") releasing. `src/levels/synapse.js`.
 - **Fold realism** — the gyri read as brain but still a touch generic; try worley
   (cellular) noise or a sulcal-depth prior for more anatomical folds.
 - **Ink / plate mode** — a Cajal black-and-white render toggle beside the photoreal

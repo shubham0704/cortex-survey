@@ -5,6 +5,8 @@ import { buildBrain } from './levels/brain.js';
 import { blip } from './audio.js';
 import * as hud from './hud.js';
 import { clamp } from './gen/noise.js';
+import { buildForest } from './levels/forest.js';
+import { createDescent } from './scalestack.js';
 
 // Bootstrap + render loop. Owns the descent path state (currently a single
 // level: scanIdx cycles the survey regions) and the frame's 3D->screen math.
@@ -14,6 +16,14 @@ const el = id => document.getElementById(id);
 const brain = buildBrain();
 scene.add(brain.group);
 const REGIONS = brain.REGIONS;
+
+// descent: the macro window drills from the cortex zoom into a Cajal neuron forest.
+const forest = buildForest();
+const deepLink = location.hash === '#forest';                    // shareable "dive straight in"
+const descent = createDescent(deepLink ? 1 : 0);
+let macroHeld = deepLink;
+if(deepLink) descent.setHeld(true);
+el('macro-window').addEventListener('click', () => { macroHeld = !macroHeld; descent.setHeld(macroHeld); });
 
 const wA = new THREE.Vector3(), wN = new THREE.Vector3(), proj = new THREE.Vector3(), camDir = new THREE.Vector3();
 let scanIdx = 0, tick = 0, last = 0, regionTimer = 0, beatTimer = 0, started = 0;
@@ -46,24 +56,38 @@ function frame(ts){
   // beat
   beatTimer += dt; if(beatTimer >= 1150){ beatTimer -= 1150; blip(240 + scanIdx*18, 0.16, 0.045); }
   // region cycle
-  regionTimer += dt; if(regionTimer >= 5200){ regionTimer = 0; tick++; scanIdx = (scanIdx + 1) % REGIONS.length; hud.setRegion(scanIdx, REGIONS, tick); }
+  regionTimer += dt; if(regionTimer >= 5200){ regionTimer = 0; tick++; scanIdx = (scanIdx + 1) % REGIONS.length; hud.setRegion(scanIdx, REGIONS, tick); forest.reseed(scanIdx); }
 
   // main render (transparent over CSS studio backdrop)
   renderer.setScissorTest(false); renderer.setClearColor(0x000000, 0); renderer.setViewport(0, 0, innerWidth, innerHeight); renderer.render(scene, camera);
 
-  // macro render — second camera into the panel window, dark eyepiece field so lit cortex pops
+  // macro render — the descent: cortex zoom (z<0.5) hands off through dark to the
+  // neuron forest (z>0.5), both rendered into the panel window's scissor rect.
+  const z = descent.update(dt);
+  forest.update(t, z);
   const mw = el('macro-window');
   if(mw && mw.offsetParent !== null){
     const r = mw.getBoundingClientRect(), y = innerHeight - r.bottom;
-    // sit between the surface point and the main camera (guaranteed to see the lit front), zoomed
-    const vdir = new THREE.Vector3().subVectors(camera.position, wA).normalize();
-    macroCam.position.copy(wA).addScaledVector(vdir, 1.25);
-    macroCam.lookAt(wA);
-    macroCam.aspect = r.width/r.height; macroCam.updateProjectionMatrix();
     renderer.setScissorTest(true); renderer.setScissor(r.left, y, r.width, r.height); renderer.setViewport(r.left, y, r.width, r.height);
-    renderer.toneMappingExposure = 0.72; renderer.setClearColor(0x0a0c12, 1); renderer.render(scene, macroCam);
+    renderer.setClearColor(0x0a0c12, 1);
+    if(z < 0.5){
+      // cortex zoom: sit between the surface point and the main camera, fade out as we descend
+      const vdir = new THREE.Vector3().subVectors(camera.position, wA).normalize();
+      macroCam.position.copy(wA).addScaledVector(vdir, 1.25); macroCam.lookAt(wA);
+      macroCam.aspect = r.width/r.height; macroCam.updateProjectionMatrix();
+      renderer.toneMappingExposure = 0.72 * descent.cortexFade();
+      renderer.render(scene, macroCam);
+    } else {
+      // neuron forest: fade in from the dark
+      forest.camera.aspect = r.width/r.height; forest.camera.updateProjectionMatrix();
+      renderer.toneMappingExposure = 1.0 * descent.forestFade();
+      renderer.render(forest.scene, forest.camera);
+    }
     renderer.setClearColor(0x000000, 0); renderer.toneMappingExposure = 0.95;
     renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight);
+    const deep = z >= 0.5;
+    el('macro-mag').textContent = deep ? 'GOLGI · L5' : ('MAG ' + REGIONS[scanIdx].mag);
+    el('scanstate').textContent = z > 0.55 ? 'NEURAL FIELD' : (z > 0.06 ? 'DESCENDING…' : 'SCANNING…');
   }
 
   // reticle + leader
