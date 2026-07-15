@@ -31,3 +31,15 @@ from `scalestack.js`.
   fluorescence-on-dark look.
 - **A real geometry morph** between levels, if we ever want a seamless (non-dark)
   hand-off, or to chain 3+ levels in one view (where true frame re-rooting kicks in).
+
+## Update — promoted to the main view + laptop zoom controls (same day)
+The descent moved out of the little macro window: **scroll / pinch / `+`/`−` keys now
+dive the *whole* main view** from the brain into the forest and back (`main.js` wheel +
+keydown + Safari gesture handlers → `descent.nudge`). No auto-loop — `z` eases toward a
+user target and rests where left. The brain dollies straight in for `z < 0.5`; a
+full-screen dark veil (`#veil`) covers the `z = 0.5` seam (theme-independent through-dark
+hand-off); the forest renders full-screen for `z > 0.5`; the reticle/leader/shadow fade
+as we leave the surface. The macro window reverts to a plain cortex zoom (surface
+context). `#forest` still deep-links straight in. This fixed "unable to use zoom controls
+from my laptop" — pinch was previously hitting the *browser's* page-zoom because nothing
+intercepted it.

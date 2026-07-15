@@ -17,16 +17,30 @@ const brain = buildBrain();
 scene.add(brain.group);
 const REGIONS = brain.REGIONS;
 
-// descent: the macro window drills from the cortex zoom into a Cajal neuron forest.
+// descent: scroll / pinch / +- keys drive a full-screen dive from the brain into
+// the neuron forest (z in [0,1]: 0 = brain surface, 1 = deep in the forest).
 const forest = buildForest();
 const deepLink = location.hash === '#forest';                    // shareable "dive straight in"
 const descent = createDescent(deepLink ? 1 : 0);
-let macroHeld = deepLink;
 if(deepLink) descent.setHeld(true);
-el('macro-window').addEventListener('click', () => { macroHeld = !macroHeld; descent.setHeld(macroHeld); });
+
+const hint = el('hint');
+let interacted = deepLink;
+function grab(){ if(!interacted){ interacted = true; if(hint) hint.classList.add('gone'); } }
+addEventListener('wheel', (e) => {                                // trackpad scroll; ctrl+wheel = pinch
+  e.preventDefault(); grab();
+  descent.nudge(clamp(-e.deltaY * (e.ctrlKey ? 0.010 : 0.0016), -0.12, 0.12));
+}, { passive: false });
+addEventListener('keydown', (e) => {
+  if(e.key === '+' || e.key === '=' || e.key === 'ArrowUp'){ grab(); descent.nudge(0.09); }
+  else if(e.key === '-' || e.key === '_' || e.key === 'ArrowDown'){ grab(); descent.nudge(-0.09); }
+});
+let gScale = 1;                                                   // Safari pinch (gesture events)
+addEventListener('gesturestart', (e) => { e.preventDefault(); gScale = e.scale; });
+addEventListener('gesturechange', (e) => { e.preventDefault(); grab(); descent.nudge((e.scale - gScale) * 1.3); gScale = e.scale; });
 
 const wA = new THREE.Vector3(), wN = new THREE.Vector3(), proj = new THREE.Vector3(), camDir = new THREE.Vector3();
-let scanIdx = 0, tick = 0, last = 0, regionTimer = 0, beatTimer = 0, started = 0;
+let scanIdx = 0, tick = 0, last = 0, regionTimer = 0, beatTimer = 0, started = 0, baseCamZ = 5.4;
 
 function resize(){
   const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false);
@@ -34,7 +48,8 @@ function resize(){
   // frame the brain so it fits both dimensions (pull back on portrait screens)
   const vfov = camera.fov*Math.PI/180, brainR = 1.16;
   const distV = brainR/Math.tan(vfov/2), distH = distV/camera.aspect;
-  camera.position.set(0.15, 0.35, Math.max(distV, distH)*1.34);
+  baseCamZ = Math.max(distV, distH)*1.34;
+  camera.position.set(0.15, 0.35, baseCamZ);
   camera.updateProjectionMatrix(); hud.sizeEEG(); hud.buildOverlay();
 }
 addEventListener('resize', resize);
@@ -42,7 +57,13 @@ addEventListener('resize', resize);
 function frame(ts){
   if(!started) started = ts; const t = (ts - started)/1000; const dt = Math.min(50, ts - last); last = ts;
   uScanTime.value = t;
-  if(!REDUCED){ brain.group.rotation.y = -0.35 + Math.sin(t*0.12)*0.42; brain.group.rotation.x = Math.sin(t*0.09)*0.06; }
+  const z = descent.update(dt);
+  forest.update(t, z);
+
+  // damp brain rotation as we dive so the zoom-in stays stable
+  if(!REDUCED){ const rot = 1 - clamp(z*2.6, 0, 1);
+    brain.group.rotation.y = -0.35 + Math.sin(t*0.12)*0.42*rot;
+    brain.group.rotation.x = Math.sin(t*0.09)*0.06*rot; }
 
   hud.tickTypewriter(dt);
 
@@ -53,52 +74,51 @@ function frame(ts){
   wN.copy(R.lnormal).transformDirection(R.host.matrixWorld);
   uScanPoint.value.copy(wA);
 
-  // beat
   beatTimer += dt; if(beatTimer >= 1150){ beatTimer -= 1150; blip(240 + scanIdx*18, 0.16, 0.045); }
-  // region cycle
   regionTimer += dt; if(regionTimer >= 5200){ regionTimer = 0; tick++; scanIdx = (scanIdx + 1) % REGIONS.length; hud.setRegion(scanIdx, REGIONS, tick); forest.reseed(scanIdx); }
 
-  // main render (transparent over CSS studio backdrop)
-  renderer.setScissorTest(false); renderer.setClearColor(0x000000, 0); renderer.setViewport(0, 0, innerWidth, innerHeight); renderer.render(scene, camera);
+  // MAIN view — the dive: brain (dollying in) for z<0.5 hands off through a dark
+  // veil to the full-screen neuron forest for z>0.5.
+  renderer.setScissorTest(false); renderer.setClearColor(0x000000, 0); renderer.setViewport(0, 0, innerWidth, innerHeight);
+  if(z < 0.5){
+    camera.position.set(0.15, 0.35, baseCamZ - clamp(z/0.5, 0, 1)*(baseCamZ - 1.5)); // dolly straight in
+    renderer.render(scene, camera);
+  } else {
+    forest.camera.aspect = innerWidth/innerHeight; forest.camera.updateProjectionMatrix();
+    renderer.render(forest.scene, forest.camera);
+  }
+  el('veil').style.opacity = (1 - clamp(Math.abs(z - 0.5)/0.18, 0, 1)).toFixed(3);     // dark seam
 
-  // macro render — the descent: cortex zoom (z<0.5) hands off through dark to the
-  // neuron forest (z>0.5), both rendered into the panel window's scissor rect.
-  const z = descent.update(dt);
-  forest.update(t, z);
+  // MACRO window — a magnified look at the scanned cortex (surface context)
   const mw = el('macro-window');
   if(mw && mw.offsetParent !== null){
     const r = mw.getBoundingClientRect(), y = innerHeight - r.bottom;
+    const vdir = new THREE.Vector3().subVectors(camera.position, wA).normalize();
+    macroCam.position.copy(wA).addScaledVector(vdir, 1.25); macroCam.lookAt(wA);
+    macroCam.aspect = r.width/r.height; macroCam.updateProjectionMatrix();
     renderer.setScissorTest(true); renderer.setScissor(r.left, y, r.width, r.height); renderer.setViewport(r.left, y, r.width, r.height);
-    renderer.setClearColor(0x0a0c12, 1);
-    if(z < 0.5){
-      // cortex zoom: sit between the surface point and the main camera, fade out as we descend
-      const vdir = new THREE.Vector3().subVectors(camera.position, wA).normalize();
-      macroCam.position.copy(wA).addScaledVector(vdir, 1.25); macroCam.lookAt(wA);
-      macroCam.aspect = r.width/r.height; macroCam.updateProjectionMatrix();
-      renderer.toneMappingExposure = 0.72 * descent.cortexFade();
-      renderer.render(scene, macroCam);
-    } else {
-      // neuron forest: fade in from the dark
-      forest.camera.aspect = r.width/r.height; forest.camera.updateProjectionMatrix();
-      renderer.toneMappingExposure = 1.0 * descent.forestFade();
-      renderer.render(forest.scene, forest.camera);
-    }
+    renderer.setClearColor(0x0a0c12, 1); renderer.toneMappingExposure = 0.72; renderer.render(scene, macroCam);
     renderer.setClearColor(0x000000, 0); renderer.toneMappingExposure = 0.95;
     renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight);
-    const deep = z >= 0.5;
-    el('macro-mag').textContent = deep ? 'GOLGI · L5' : ('MAG ' + REGIONS[scanIdx].mag);
-    el('scanstate').textContent = z > 0.55 ? 'NEURAL FIELD' : (z > 0.06 ? 'DESCENDING…' : 'SCANNING…');
   }
 
-  // reticle + leader
-  camera.getWorldDirection(camDir);
-  const facing = wN.dot(camDir); // <0 means facing camera
-  proj.copy(wA).project(camera);
-  const [ow, oh] = hud.overlaySize();
-  const sx = (proj.x*0.5 + 0.5)*ow, sy = (-proj.y*0.5 + 0.5)*oh;
-  const vis = facing < -0.02 && proj.z < 1;
-  const op = vis ? clamp((-facing)*2.2, 0.15, 1) : 0;
-  hud.updateReticleLeader(sx, sy, op, t);
+  // reticle + leader + contact shadow fade out as we leave the surface
+  const surf = clamp(1 - z*2.6, 0, 1);
+  el('overlay').style.opacity = surf.toFixed(2);
+  el('shadow').style.opacity = surf.toFixed(2);
+  if(surf > 0.01){
+    camera.getWorldDirection(camDir);
+    const facing = wN.dot(camDir);
+    proj.copy(wA).project(camera);
+    const [ow, oh] = hud.overlaySize();
+    const sx = (proj.x*0.5 + 0.5)*ow, sy = (-proj.y*0.5 + 0.5)*oh;
+    const vis = facing < -0.02 && proj.z < 1;
+    const op = vis ? clamp((-facing)*2.2, 0.15, 1) : 0;
+    hud.updateReticleLeader(sx, sy, op, t);
+  }
+
+  el('macro-mag').textContent = 'MAG ' + REGIONS[scanIdx].mag;
+  el('scanstate').textContent = z > 0.55 ? 'NEURAL FIELD' : (z > 0.06 ? 'DESCENDING…' : 'SCANNING…');
 
   hud.drawEEG(t*1000);
   const s = Math.floor(t); el('clock').textContent = [s/3600, s/60%60, s%60].map(n => ('0'+Math.floor(n)).slice(-2)).join(':');
